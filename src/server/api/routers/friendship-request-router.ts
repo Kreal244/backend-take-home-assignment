@@ -79,12 +79,18 @@ export const friendshipRequestRouter = router({
        * scenario for Question 3
        *  - Run `yarn test` to verify your answer
        */
+      // check if friendship request already exists do update status
       return ctx.db
         .insertInto('friendships')
         .values({
           userId: ctx.session.userId,
           friendUserId: input.friendUserId,
           status: FriendshipStatusSchema.Values['requested'],
+        })
+        .onConflict((qb) => {
+          return qb.doUpdateSet({
+            status: FriendshipStatusSchema.Values['requested'],
+          })
         })
         .execute()
     }),
@@ -117,7 +123,33 @@ export const friendshipRequestRouter = router({
          *  - https://kysely-org.github.io/kysely/classes/Kysely.html#insertInto
          *  - https://kysely-org.github.io/kysely/classes/Kysely.html#updateTable
          */
-        
+        // Insert or update the friendship status
+        await t
+          .insertInto('friendships')
+          .values({
+            userId: ctx.session.userId,
+            friendUserId: input.friendUserId,
+            status: FriendshipStatusSchema.Values['accepted'],
+          })
+          .onConflict((qb) => {
+            return qb.doUpdateSet({
+              status: FriendshipStatusSchema.Values['accepted'],
+            })
+          })
+          .execute()
+        return await t
+          .insertInto('friendships')
+          .values({
+            userId: input.friendUserId,
+            friendUserId: ctx.session.userId,
+            status: FriendshipStatusSchema.Values['accepted'],
+          })
+          .onConflict((qb) => {
+            return qb.doUpdateSet({
+              status: FriendshipStatusSchema.Values['accepted'],
+            })
+          })
+          .execute()
       })
     }),
 
@@ -138,5 +170,16 @@ export const friendshipRequestRouter = router({
        * Documentation references:
        *  - https://vitest.dev/api/#test-skip
        */
+
+      // update the friendship status 
+      return await ctx.db
+        .updateTable('friendships')
+        .set({
+          status: FriendshipStatusSchema.Values['declined'],
+        })
+        .where('userId', '=', input.friendUserId)
+        .where('friendUserId', '=', ctx.session.userId)
+        .where('status', '=', FriendshipStatusSchema.Values['requested'])
+        .execute()
     }),
 })

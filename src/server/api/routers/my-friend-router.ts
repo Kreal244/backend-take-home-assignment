@@ -47,6 +47,11 @@ export const myFriendRouter = router({
             'userTotalFriendCount.userId',
             'friends.id'
           )
+          .innerJoin(
+            mutualFriendCount(conn, ctx.session.userId).as('mutualFriendCount'),
+            'mutualFriendCount.userId',
+            'friends.id'
+          )
           .where('friendships.userId', '=', ctx.session.userId)
           .where('friendships.friendUserId', '=', input.friendUserId)
           .where(
@@ -59,6 +64,7 @@ export const myFriendRouter = router({
             'friends.fullName',
             'friends.phoneNumber',
             'totalFriendCount',
+            'mutualFriendCount.mutualFriendCount',
           ])
           .executeTakeFirstOrThrow(() => new TRPCError({ code: 'NOT_FOUND' }))
           .then(
@@ -83,4 +89,42 @@ const userTotalFriendCount = (db: Database) => {
       eb.fn.count('friendships.friendUserId').as('totalFriendCount'),
     ])
     .groupBy('friendships.userId')
+}
+// group userId by friendUserId then
+const mutualFriendCount = (db: Database, userId: number) => {
+  //group userId by friendUserId
+  const mutualFriendGroup = db
+    .selectFrom('friendships')
+    .select((eb) => [
+      'friendships.friendUserId',
+      'friendships.userId',
+      eb.fn.sum('friendships.userId').as('mutualFriendCount'),
+    ])
+    .where('friendships.status', '=', FriendshipStatusSchema.Values['accepted'])
+    .groupBy('friendships.friendUserId')
+    .as('mutualfriend_group')
+  //count mutual friend based on userId join with mutualFriendGroup
+  return db
+    .selectFrom((eb) =>
+      eb
+        .selectFrom(mutualFriendGroup)
+        .innerJoin(
+          'friendships',
+          'mutualfriend_group.friendUserId',
+          'friendships.friendUserId'
+        )
+        .select([
+          'mutualfriend_group.userId as mutualFriendId',
+          'friendships.userId',
+        ])
+        .where('friendships.friendUserId', '=', userId)
+        .where('mutualfriend_group.userId', '!=', userId)
+        .where('mutualfriend_group.mutualFriendCount', '>', 1)
+        .as('mutalFriendList')
+    )
+    .select((eb) => [
+      'mutalFriendList.userId',
+      eb.fn.count('mutalFriendList.mutualFriendId').as('mutualFriendCount'),
+    ])
+    .groupBy('mutalFriendList.userId')
 }
