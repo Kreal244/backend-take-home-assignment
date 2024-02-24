@@ -58,7 +58,7 @@ module.exports = {
         'newlines-between': 'always',
       },
     ],
-    'prettier/prettier': 'error',
+    'prettier/prettier': ['off', { singleQuote: true }],
   },
   overrides: [
     {
