@@ -1,8 +1,7 @@
-import { jsonArrayFrom } from 'kysely/helpers/postgres';
 import type { Database } from '@/server/db'
 
 import { TRPCError } from '@trpc/server'
-import { ZodArray, z } from 'zod'
+import { z } from 'zod'
 
 import { FriendshipStatusSchema } from '@/utils/server/friendship-schemas'
 import { protectedProcedure } from '@/server/trpc/procedures'
@@ -12,6 +11,7 @@ import {
   CountSchema,
   IdSchema,
 } from '@/utils/server/base-schemas'
+
 export const myFriendRouter = router({
   getById: protectedProcedure
     .input(
@@ -26,7 +26,7 @@ export const myFriendRouter = router({
          *
          * Add `mutualFriendCount` to the returned result of this query. You can
          * either:
-         *  (1) Make a separate query to count the number of mutual friends,
+         *  (4) Make a separate query to count the number of mutual friends,
          *  then combine the result with the result of this query
          *  (2) BONUS: Use a subquery (hint: take a look at how
          *  `totalFriendCount` is implemented)
@@ -48,7 +48,7 @@ export const myFriendRouter = router({
             'friends.id'
           )
           .leftJoin(
-            mutualFriendCount(conn, ctx.session.userId, input.friendUserId).as('mutualFriendCount'),
+            mutualFriendCount(conn, ctx.session.userId).as('mutualFriendCount'),
             'mutualFriendCount.userId',
             'friends.id'
           )
@@ -80,7 +80,7 @@ export const myFriendRouter = router({
     }),
     // get all friends as a list
     getAllFriendsList: protectedProcedure
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ ctx }) => {
         return ctx.db.transaction().execute(async (t) =>
         {
           const user = await t.selectFrom('users').selectAll().where('id', '=', ctx.session.userId).executeTakeFirstOrThrow(() => new TRPCError({ code: 'NOT_FOUND' }))
@@ -123,7 +123,7 @@ const userTotalFriendCount = (db: Database) => {
     .groupBy('friendships.userId')
 }
 
-const mutualFriendCount = (db: Database, userId: number,  friendUserId:number) => {
+const mutualFriendCount = (db: Database, userId: number) => {
 
   //get all friends base on User Id
   const getMutalFriend = db.selectFrom('friendships')
