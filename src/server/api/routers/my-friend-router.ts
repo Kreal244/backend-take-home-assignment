@@ -83,7 +83,9 @@ export const myFriendRouter = router({
       .mutation(async ({ ctx }) => {
         return ctx.db.transaction().execute(async (t) =>
         {
+          //get user information base on userId
           const user = await t.selectFrom('users').selectAll().where('id', '=', ctx.session.userId).executeTakeFirstOrThrow(() => new TRPCError({ code: 'NOT_FOUND' }))
+          //get all friends base on UserId
           const friensList = await t.selectFrom(getFriendList(t, ctx.session.userId)).selectAll().execute()
           return {
             user,
@@ -91,6 +93,7 @@ export const myFriendRouter = router({
           }
         }
         ).then(res => {
+          // combine friend list as array object
           const friendList = z.array(
             z.object({
               friendUserId: IdSchema,
@@ -98,6 +101,7 @@ export const myFriendRouter = router({
               friendPhoneNumber: NonEmptyStringSchema,
             })
           ).parse(res.friensList);
+          // combine user information as object
           const userSchema = z.object({
             id: IdSchema,
             fullName: NonEmptyStringSchema,
@@ -131,17 +135,22 @@ const mutualFriendCount = (db: Database, userId: number) => {
     .select([
       'friendships.friendUserId'
     ]);
-  // get all mutal friends base on friendUserId
+  // get count mutal friends who have accepted friendship request
   return db.selectFrom('friendships')
     .where('friendships.friendUserId', 'in', getMutalFriend)
     .select((eb) => [
       'friendships.userId',
       eb.fn.count('friendships.friendUserId')
         .filterWhere('friendships.status', '=', FriendshipStatusSchema.Values['accepted'])
+        .filterWhere('friendships.userId','!=',userId)
         .as('mutualFriendCount'),
     ])
     .groupBy('friendships.userId')
 }
+// Extra function requested
+/**
+ * get friend list who has friendship with user by userId
+ * */ 
 const getFriendList = (db: Database, userId:number) => {
   return db
     .selectFrom('friendships')
